@@ -6,7 +6,6 @@ import (
 
 	"github.com/centrifuge/go-substrate-rpc-client/config"
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v3"
-	"github.com/centrifuge/go-substrate-rpc-client/v3/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v3/types"
 )
 
@@ -28,10 +27,18 @@ type Connection struct {
 	Api *gsrpc.SubstrateAPI
 }
 
-func NewConnection() (*Connection, error) {
+func NewDefaultConnection() (*Connection, error) {
+	return NewConnection("")
+}
+
+func NewConnection(endpoint string) (*Connection, error) {
+	cfg := config.Default().RPCURL
+	if endpoint != "" {
+		cfg = endpoint
+	}
 	c := Connection{}
 	var err error
-	c.Api, err = gsrpc.NewSubstrateAPI(config.Default().RPCURL)
+	c.Api, err = gsrpc.NewSubstrateAPI(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +99,15 @@ func (c *Connection) GetBalance(id string) (types.U128, error) {
 	return num, nil
 }
 
+func (c *Connection) GetAddress(pubkey []byte) (types.Address, error) {
+	pkey := []byte{0x01, 32}
+
+	address := types.NewAddressFromAccountID(pkey)
+
+	return address, nil
+}
+
+/*
 func (c *Connection) Transfer(from, to string, amount uint64) error {
 
 	meta, err := c.Api.RPC.State.GetMetadataLatest()
@@ -164,3 +180,4 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 
 	return nil
 }
+*/
