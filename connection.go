@@ -6,6 +6,7 @@ import (
 
 	"github.com/centrifuge/go-substrate-rpc-client/config"
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v3"
+	"github.com/centrifuge/go-substrate-rpc-client/v3/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v3/types"
 )
 
@@ -100,24 +101,22 @@ func (c *Connection) GetBalance(id string) (types.U128, error) {
 }
 
 func (c *Connection) GetAddress(pubkey []byte) (types.Address, error) {
-	pkey := []byte{0x01, 32}
 
-	address := types.NewAddressFromAccountID(pkey)
+	address := types.NewAddressFromAccountID(pubkey)
 
 	return address, nil
 }
 
-/*
 func (c *Connection) Transfer(from, to string, amount uint64) error {
 
 	meta, err := c.Api.RPC.State.GetMetadataLatest()
 	if err != nil {
-		return err
+		return fmt.Errorf("fetch metadata failed: %w", err)
 	}
 
 	recipient, err := types.NewMultiAddressFromHexAccountID(to)
 	if err != nil {
-		return err
+		return fmt.Errorf("recipient set: %w", err)
 	}
 
 	call, err := types.NewCall(meta, "Balances.transfer", recipient, types.NewUCompactFromUInt(amount))
@@ -128,7 +127,7 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 
 	genesisHash, err := c.Api.RPC.Chain.GetBlockHash(0)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get block hash: %w", err)
 	}
 
 	runtimeVersion, err := c.Api.RPC.State.GetRuntimeVersionLatest()
@@ -168,9 +167,11 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 	}
 
 	// Sign transaction
-	if err := extrinsic.Sign(signature.TestKeyringPairAlice, o); err != nil {
+	var keyring signature.KeyringPair = signature.TestKeyringPairAlice
+	if err := extrinsic.Sign(keyring, o); err != nil {
 		return fmt.Errorf("problem signing: %w", err)
 	}
+	fmt.Printf("%#x\n", extrinsic.Signature)
 
 	hash, err := c.Api.RPC.Author.SubmitExtrinsic(extrinsic)
 	if err != nil {
@@ -180,4 +181,3 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 
 	return nil
 }
-*/
