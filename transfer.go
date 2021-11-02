@@ -72,18 +72,39 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 		TransactionVersion: runtimeVersion.TransactionVersion,
 	}
 
-	// Sign transaction
-	// The keyring pair fr contains the derivation path for the private key.
-	// Signing scheme is hardcoded here:
-	// /home/david/go_projects/pkg/mod/github.com/centrifuge/go-substrate-rpc-client/v3@v3.0.2/signature/signature.go:77
-	// - Pass the signing scheme in from here
-	//
-	// Derive keypair from private key URI (this accepts the signing scheme):
-	// /home/david/go_projects/pkg/mod/github.com/vedhavyas/go-subkey@v1.0.2/scheme.go:17
-	// How does this func get the secret phrase from the URI
-	if err := extrinsic.Sign(fr, o); err != nil {
-		return fmt.Errorf("problem signing: %w", err)
+	// Unsigned Payload
+	payload, err := createUnsignedPayload(&extrinsic, o)
+	if err != nil {
+		return fmt.Errorf("problem creating extrinsic payload: %w", err)
 	}
+
+	signature, err := signPayload(payload, fr)
+	if err != nil {
+		return fmt.Errorf("error signing payload: %w", err)
+	}
+	era := o.Era
+	if !o.Era.IsMortalEra {
+		era = types.ExtrinsicEra{IsImmortalEra: true}
+	}
+
+	signerPubKey := types.NewMultiAddressFromAccountID(fr.PublicKey)
+	fullSignature := types.ExtrinsicSignatureV4{
+		Signer:    signerPubKey,
+		Signature: types.MultiSignature{IsSr25519: true, AsSr25519: signature},
+		Era:       era,
+		Nonce:     o.Nonce,
+		Tip:       o.Tip,
+	}
+
+	extrinsic.Signature = fullSignature
+	// mark the extrinsic as signed
+	extrinsic.Version |= types.ExtrinsicBitSigned
+
+	// TODO Check this <---------------------------------------------------------------------------------
+	//	if err := extrinsic.Sign(fr, o); err != nil {
+	//		return fmt.Errorf("problem signing: %w", err)
+	//	}
+	// <-------------------------------------------------------------------------------------------------
 
 	if extrinsic.IsSigned() {
 		fmt.Println("extrinsic is signed")
@@ -95,6 +116,29 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 	fmt.Printf("Transfer sent with hash %#x\n", hash)
 
 	return nil
+}
+
+func signPayload(payload types.ExtrinsicPayloadV4, signer signature.KeyringPair) (types.Signature, error) {
+	// This is what must be sent to MPC network for signing.
+	bytes, err := types.EncodeToBytes(payload)
+	if err != nil {
+		return types.Signature{}, err
+	}
+
+	// Sign data with the private key under the given derivation path - for GSRPC, the signature scheme
+	// is set to sr25519. Depending on how the MPC signing works, we will probably just need to add the
+	// signature over the message bytes into a Signature struct (see below)
+	//
+	// NOTE: If data is longer than 256 bytes, hash first:
+	// if len(data) > 256 {
+	//	h := blake2b.Sum256(data)
+	//	data = h[:]
+	// }
+
+	sig, err := signature.Sign(bytes, signer.URI)
+
+	// NewSignature just copies signature []byte b into a Signature{} h: copy(h[:], b)
+	return types.NewSignature(sig), err
 }
 
 // unsignedExtrinsic
