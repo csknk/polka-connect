@@ -44,16 +44,13 @@ func main() {
 	add.Encode(*e)
 	fmt.Printf("e: %#x\n", &buf)
 
-	//	num, err := nc.GetBalance(AlicePubkey)
-	num, err := nc.GetBalance(TestAddr)
+	num, err := nc.GetBalance(AlicePubkey)
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("balance: %s\n", num)
 
-	//	from := ""
-	to := "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48"
-	if err := nc.Transfer(AlicePubkey, to, 4200); err != nil {
+	if err := nc.Transfer(AlicePubkey, BobPubkey, 1000000000000000); err != nil {
 		log.Fatal(err)
 	}
 	//	printLatestBlockHash()
