@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 
 	"github.com/centrifuge/go-substrate-rpc-client/config"
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v3"
-	"github.com/centrifuge/go-substrate-rpc-client/v3/scale"
 )
 
 // Used for testing purposes - this public key is deterministically generated when a local dev network is
@@ -27,32 +25,34 @@ func main() {
 		log.Fatal(err)
 	}
 	//	nc.HealthReport()
+	/*
+		add, err := nc.GetAddress([]byte{
+			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(add.AsAccountID)
 
-	add, err := nc.GetAddress([]byte{
-		0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-		0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-		0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-		0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(add.AsAccountID)
+		var buf bytes.Buffer
+		e := scale.NewEncoder(&buf)
+		add.Encode(*e)
+		fmt.Printf("e: %#x\n", &buf)
 
-	var buf bytes.Buffer
-	e := scale.NewEncoder(&buf)
-	add.Encode(*e)
-	fmt.Printf("e: %#x\n", &buf)
+		num, err := nc.GetBalance(AlicePubkey)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("balance: %s\n", num)
 
-	num, err := nc.GetBalance(AlicePubkey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("balance: %s\n", num)
-
-	if err := nc.Transfer(AlicePubkey, BobPubkey, 1000000000000000); err != nil {
-		log.Fatal(err)
-	}
+		if err := nc.Transfer(AlicePubkey, BobPubkey, 1000000000000000); err != nil {
+			log.Fatal(err)
+		}
+	*/
+	nc.getExtrinsic("0xd4cba21f5ee0078c21af2e5887cd3c7248ee1ed74bb938530dd034361859a456", 0)
 	//	printLatestBlockHash()
 }
 

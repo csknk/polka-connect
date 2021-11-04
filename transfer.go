@@ -78,10 +78,12 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 		return fmt.Errorf("problem creating extrinsic payload: %w", err)
 	}
 
+	// signPayload is a placeholder for MPC signing functionality.
 	signature, err := signPayload(payload, fr)
 	if err != nil {
 		return fmt.Errorf("error signing payload: %w", err)
 	}
+
 	era := o.Era
 	if !o.Era.IsMortalEra {
 		era = types.ExtrinsicEra{IsImmortalEra: true}
@@ -109,6 +111,18 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 	if extrinsic.IsSigned() {
 		fmt.Println("extrinsic is signed")
 	}
+
+	//	h, _ := types.GetHash(extrinsic)
+	//	fmt.Printf("%#x\n", h)
+	//	e2 := types.ExtrinsicSignatureV4{}
+	//	decoder := scale.NewDecoder(bytes.NewReader(buf.Bytes()))
+
+	//		b := make([]byte, 1024)
+	//		buf := bytes.NewReader(b)
+	//		d := scale.NewDecoder(buf)
+	//		a := extrinsic.Decode(*d)
+	//		fmt.Println(a)
+
 	hash, err := c.Api.RPC.Author.SubmitExtrinsic(extrinsic)
 	if err != nil {
 		return fmt.Errorf("submit extrinsic: %w", err)
