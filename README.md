@@ -23,7 +23,24 @@ if err != nil {
 fmt.Println(hash.Hex())
 ```
 
-See: https://pkg.go.dev/github.com/centrifuge/go-substrate-rpc-client?utm_source=godoc#example-package-MakeASimpleTransfer
+Extrinsic Hash
+--------------
+Get the hash that identifies an extrinsic by passing the signed extrinsic to `types.GetHash()`:
 
+```go
+h, _ := types.GetHash(extrinsic)
+fmt.Printf("%#x\n", h)
+```
+
+Submit Extrinsic for Inclusion in the L1 Chain
+----------------------------------------------
+The `author_submitExtrinsic` method just returns the extrinsic hash - it has no knowledge of validation or chain inclusion status.
+
+```go
+hash, err := c.Api.RPC.Author.SubmitExtrinsic(extrinsic)
+fmt.Printf("Transfer sent with hash %#x\n", hash) // sent, but included?
+```
+
+See: https://pkg.go.dev/github.com/centrifuge/go-substrate-rpc-client?utm_source=godoc#example-package-MakeASimpleTransfer
 See: https://pkg.go.dev/github.com/centrifuge/go-substrate-rpc-client?utm_source=godoc#hdr-Signing_extrinsics
 

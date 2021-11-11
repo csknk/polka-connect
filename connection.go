@@ -33,6 +33,7 @@ func NewDefaultConnection() (*Connection, error) {
 
 func NewConnection(endpoint string) (*Connection, error) {
 	cfg := config.Default().RPCURL
+
 	if endpoint != "" {
 		cfg = endpoint
 	}
@@ -80,7 +81,7 @@ func (c *Connection) GetBalance(id string) (types.U128, error) {
 
 	meta, err := c.Api.RPC.State.GetMetadataLatest()
 	if err != nil {
-		return zero, err
+		return zero, fmt.Errorf("can't get meta for api: %w", err)
 	}
 
 	key, err := types.CreateStorageKey(meta, "System", "Account", account, nil)

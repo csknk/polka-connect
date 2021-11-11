@@ -24,35 +24,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//	nc.HealthReport()
-	/*
-		add, err := nc.GetAddress([]byte{
-			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-			0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(add.AsAccountID)
+	nc.HealthReport()
 
-		var buf bytes.Buffer
-		e := scale.NewEncoder(&buf)
-		add.Encode(*e)
-		fmt.Printf("e: %#x\n", &buf)
+	num, err := nc.GetBalance(AlicePubkey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("balance: %s\n", num)
 
-		num, err := nc.GetBalance(AlicePubkey)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Printf("balance: %s\n", num)
+	if err := nc.Transfer(AlicePubkey, BobPubkey, 4200000000000000); err != nil {
+		log.Fatal(err)
+	}
 
-		if err := nc.Transfer(AlicePubkey, BobPubkey, 1000000000000000); err != nil {
-			log.Fatal(err)
-		}
-	*/
-	nc.getExtrinsic("0xd4cba21f5ee0078c21af2e5887cd3c7248ee1ed74bb938530dd034361859a456", 0)
+	//	nc.getExtrinsic("0xd4cba21f5ee0078c21af2e5887cd3c7248ee1ed74bb938530dd034361859a456", 0)
+	//	if err := nc.getExtrinsic("0xea66368f5bc6ed3d707ac53a12bb1832b307e6253fee5474d1fa1b6bb5ece5f9", 0); err != nil {
+	//		log.Fatal(err)
+	//	}
 	//	printLatestBlockHash()
 }
 
