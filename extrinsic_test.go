@@ -15,7 +15,7 @@ func TestEncodeDecodeExtrinsic(t *testing.T) {
 	c, err := NewDefaultConnection()
 	if err != nil {
 		fmt.Println("No connection to node")
-		assert.Fail(t, err.Error())
+		assert.FailNow(t, err.Error())
 	}
 	AlicePubkey := "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d" // 15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5
 	BobPubkey := "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48"   // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3

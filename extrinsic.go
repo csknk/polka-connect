@@ -7,6 +7,75 @@ import (
 	"github.com/centrifuge/go-substrate-rpc-client/v3/types"
 )
 
+type Transaction *types.Extrinsic
+
+func (c *Connection) GenTransaction(currency int, from, to string, amount uint64) (tx *Transaction, toBeSigned []byte, err error) {
+	meta, err := c.Api.RPC.State.GetMetadataLatest()
+	if err != nil {
+		return nil, nil, fmt.Errorf("fetch metadata failed: %w", err)
+	}
+
+	// recipient is a MultiAddress struct which will be used to build a suitable Polkadot MultiAddress type.
+	// In our case, this will generally be a MultiAddress struct with fields set for `AsID` - containing
+	// the public key bytes and `IsID` - a boolean indicating the type of this MultiAddress.
+	recipient, err := types.NewMultiAddressFromHexAccountID(to)
+	if err != nil {
+		return nil, nil, fmt.Errorf("recipient set: %w", err)
+	}
+
+	call, err := types.NewCall(meta, "Balances.transfer", recipient, types.NewUCompactFromUInt(amount))
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem building new call: %w", err)
+	}
+
+	extrinsic := types.NewExtrinsic(call)
+
+	genesisHash, err := c.Api.RPC.Chain.GetBlockHash(0)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get block hash: %w", err)
+	}
+
+	runtimeVersion, err := c.Api.RPC.State.GetRuntimeVersionLatest()
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem getting latest version of runtime: %w", err)
+	}
+
+	// Build a key that will be used to fetch account balance
+	key, err := types.CreateStorageKey(meta, "System", "Account", types.HexDecodeString(publicKeyFromAddress(from)))
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem creating storage key: %w", err)
+	}
+
+	var accountInfo types.AccountInfo
+
+	// Sender's account info
+	ok, err := c.Api.RPC.State.GetStorageLatest(key, &accountInfo)
+	if err != nil || !ok {
+		return nil, nil, fmt.Errorf("problem getting accountInfo: %w", err)
+	}
+
+	// Existing on-chain nonce held against this account
+	nonce := uint32(accountInfo.Nonce)
+
+	// Set signature options.
+	o := types.SignatureOptions{
+		BlockHash:          genesisHash,
+		Era:                types.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              types.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        runtimeVersion.SpecVersion,
+		Tip:                types.NewUCompactFromUInt(0),
+		TransactionVersion: runtimeVersion.TransactionVersion,
+	}
+
+	// Unsigned Payload
+	payload, err := createUnsignedPayload(&extrinsic, o)
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem creating extrinsic payload: %w", err)
+	}
+	return nil, payload, nil
+}
+
 func (c *Connection) NewExtrinsic(from, to string, amount uint64) (*types.Extrinsic, error) {
 
 	meta, err := c.Api.RPC.State.GetMetadataLatest()
@@ -88,6 +157,7 @@ func (c *Connection) NewExtrinsic(from, to string, amount uint64) (*types.Extrin
 		return nil, fmt.Errorf("error signing payload: %w", err)
 	}
 
+	// watcher, async
 	era := o.Era
 	if !o.Era.IsMortalEra {
 		era = types.ExtrinsicEra{IsImmortalEra: true}
