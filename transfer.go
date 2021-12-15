@@ -29,8 +29,7 @@ func (c *Connection) Transfer(from, to string, amount uint64) error {
 		status := <-subscription.Chan()
 		if status.IsInBlock || status.IsFinalized {
 			fmt.Printf("included in block %#x\n", status.AsInBlock)
-			fmt.Println(status.MarshalJSON())
-
+			//			fmt.Println(status.MarshalJSON())
 			break
 		}
 		fmt.Println("Waiting for extrinsic to be included in a block...")

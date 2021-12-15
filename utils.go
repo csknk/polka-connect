@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"log"
 
 	"github.com/btcsuite/btcutil/base58"
+	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/config"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -52,4 +55,16 @@ func addressComponents(address string) (addressChecksum, publicKey []byte, netwo
 		return nil, nil, 0, err
 	}
 	return
+}
+
+func printLatestBlockHash() {
+	api, err := gsrpc.NewSubstrateAPI(config.Default().RPCURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	hash, err := api.RPC.Chain.GetBlockHashLatest()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(hash.Hex())
 }
