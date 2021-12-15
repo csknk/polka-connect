@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/centrifuge/go-substrate-rpc-client/v3/signature"
-	"github.com/centrifuge/go-substrate-rpc-client/v3/types"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 )
 
 type Transaction *types.Extrinsic
@@ -41,7 +41,12 @@ func (c *Connection) GenTransaction(currency int, from, to string, amount uint64
 	}
 
 	// Build a key that will be used to fetch account balance
-	key, err := types.CreateStorageKey(meta, "System", "Account", types.HexDecodeString(publicKeyFromAddress(from)))
+	fromPubKey, err := PublicKeyFromAddress(from)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key, err := types.CreateStorageKey(meta, "System", "Account", fromPubKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("problem creating storage key: %w", err)
 	}
@@ -73,7 +78,12 @@ func (c *Connection) GenTransaction(currency int, from, to string, amount uint64
 	if err != nil {
 		return nil, nil, fmt.Errorf("problem creating extrinsic payload: %w", err)
 	}
-	return nil, payload, nil
+	payloadBytes, err := types.EncodeToBytes(payload)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return nil, payloadBytes, nil
 }
 
 func (c *Connection) NewExtrinsic(from, to string, amount uint64) (*types.Extrinsic, error) {

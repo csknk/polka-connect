@@ -6,8 +6,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/centrifuge/go-substrate-rpc-client/v3/scale"
-	"github.com/centrifuge/go-substrate-rpc-client/v3/types"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/scale"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,6 +31,13 @@ func TestEncodeDecodeExtrinsic(t *testing.T) {
 	fmt.Println("Signed extrinsic: ", extrinsicString)
 
 	_ = DecodeExtrinsic(t, c, extrinsicString)
+
+	h := types.Hash{
+		255, 1, 0, 255, 255, 255, 255, 255,
+		255, 255, 255, 255, 255, 255, 255, 255,
+		255, 1, 255, 255, 255, 255, 255, 255,
+		255, 255, 255, 255, 255, 255, 255, 255}
+	fmt.Println("h: ", h.Hex())
 
 }
 

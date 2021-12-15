@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/config"
-	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v3"
-	"github.com/centrifuge/go-substrate-rpc-client/v3/types"
+	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 )
 
 // See: https://github.com/centrifuge/go-substrate-rpc-client/issues/154#issuecomment-850351285
@@ -72,6 +73,21 @@ func (c *Connection) HealthReport() {
 	fmt.Println("should have peers: ", health.ShouldHavePeers)
 }
 
+func (c *Connection) HealthReportTimeout() error {
+	ch := make(chan error, 1)
+	go func() {
+		_, err := c.Api.RPC.System.Health()
+		ch <- err
+	}()
+
+	select {
+	case res := <-ch:
+		return res
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("check Polkadot node timeout exceeded")
+	}
+}
+
 func (c *Connection) GetBalance(id string) (types.U128, error) {
 	account, err := types.HexDecodeString(id)
 	zero := types.NewU128(*big.NewInt(0))
@@ -101,8 +117,6 @@ func (c *Connection) GetBalance(id string) (types.U128, error) {
 }
 
 func (c *Connection) GetAddress(pubkey []byte) (types.Address, error) {
-
 	address := types.NewAddressFromAccountID(pubkey)
-
 	return address, nil
 }

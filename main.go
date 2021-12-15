@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/centrifuge/go-substrate-rpc-client/config"
-	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v3"
+	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 )
 
 // Used for testing purposes - this public key is deterministically generated when a local dev network is
@@ -31,16 +31,16 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("balance: %s\n", num)
-
 	if err := nc.Transfer(AlicePubkey, BobPubkey, 4200000000000000); err != nil {
 		log.Fatal(err)
 	}
-
-	//	nc.getExtrinsic("0xd4cba21f5ee0078c21af2e5887cd3c7248ee1ed74bb938530dd034361859a456", 0)
-	//	if err := nc.getExtrinsic("0xea66368f5bc6ed3d707ac53a12bb1832b307e6253fee5474d1fa1b6bb5ece5f9", 0); err != nil {
-	//		log.Fatal(err)
-	//	}
-	//	printLatestBlockHash()
+	/*
+		//	nc.getExtrinsic("0xd4cba21f5ee0078c21af2e5887cd3c7248ee1ed74bb938530dd034361859a456", 0)
+		//	if err := nc.getExtrinsic("0xea66368f5bc6ed3d707ac53a12bb1832b307e6253fee5474d1fa1b6bb5ece5f9", 0); err != nil {
+		//		log.Fatal(err)
+		//	}
+		//	printLatestBlockHash()
+	*/
 }
 
 func printLatestBlockHash() {
