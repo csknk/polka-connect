@@ -50,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("%#x\n", m)
+	//	fmt.Printf("%#x\n", m)
 	fmt.Printf("size of metadata: %d\n", len(m))
 
 }
