@@ -13,7 +13,8 @@ func ex1() {
 	fromPrivKeyHexstring := "0xb1b862df61c87139ed6d491b99a0a275fe69fd68b9765a4a442badb2cf2e8358" // Csknk
 	// fromAddr := "15m88WrpqNhWQRWicU4WC4ArgrQ8SP7gJEd9X2SX2JdSiyRc"
 	//	toAddress := "14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3" // Bob
-	toPubKeyHexstring := "" // Bob
+	BobPubkey := "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48" // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3
+	toPubKeyHexstring := BobPubkey                                                    // Bob
 
 	// Display the events that occur during a transfer by sending a value to bob
 
@@ -46,7 +47,7 @@ func ex1() {
 		panic(err)
 	}
 
-	amount := types.NewUCompactFromUInt(dotToPlank(2))
+	amount := types.NewUCompactFromUInt(dotToPlank(1000))
 
 	// Get the nonce for Alice
 	//	to, err := types.NewMultiAddressFromHexAccountID("0x4c4f0e86470be8bce081440c8b9cb2703bee894340173775442ae123d4fe1b71")
