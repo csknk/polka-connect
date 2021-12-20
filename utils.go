@@ -68,3 +68,7 @@ func printLatestBlockHash() {
 	}
 	fmt.Println(hash.Hex())
 }
+
+func dotToPlank(dotInput int) uint64 {
+	return uint64(dotInput * (1e10))
+}

@@ -9,84 +9,7 @@ import (
 
 type Transaction *types.Extrinsic
 
-func (c *Connection) GenTransaction(currency int, from, to string, amount uint64) (tx *Transaction, toBeSigned []byte, err error) {
-	meta, err := c.Api.RPC.State.GetMetadataLatest()
-	if err != nil {
-		return nil, nil, fmt.Errorf("fetch metadata failed: %w", err)
-	}
-
-	// recipient is a MultiAddress struct which will be used to build a suitable Polkadot MultiAddress type.
-	// In our case, this will generally be a MultiAddress struct with fields set for `AsID` - containing
-	// the public key bytes and `IsID` - a boolean indicating the type of this MultiAddress.
-	recipient, err := types.NewMultiAddressFromHexAccountID(to)
-	if err != nil {
-		return nil, nil, fmt.Errorf("recipient set: %w", err)
-	}
-
-	call, err := types.NewCall(meta, "Balances.transfer", recipient, types.NewUCompactFromUInt(amount))
-	if err != nil {
-		return nil, nil, fmt.Errorf("problem building new call: %w", err)
-	}
-
-	extrinsic := types.NewExtrinsic(call)
-
-	genesisHash, err := c.Api.RPC.Chain.GetBlockHash(0)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get block hash: %w", err)
-	}
-
-	runtimeVersion, err := c.Api.RPC.State.GetRuntimeVersionLatest()
-	if err != nil {
-		return nil, nil, fmt.Errorf("problem getting latest version of runtime: %w", err)
-	}
-
-	// Build a key that will be used to fetch account balance
-	fromPubKey, err := PublicKeyFromAddress(from)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	key, err := types.CreateStorageKey(meta, "System", "Account", fromPubKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("problem creating storage key: %w", err)
-	}
-
-	var accountInfo types.AccountInfo
-
-	// Sender's account info
-	ok, err := c.Api.RPC.State.GetStorageLatest(key, &accountInfo)
-	if err != nil || !ok {
-		return nil, nil, fmt.Errorf("problem getting accountInfo: %w", err)
-	}
-
-	// Existing on-chain nonce held against this account
-	nonce := uint32(accountInfo.Nonce)
-
-	// Set signature options.
-	o := types.SignatureOptions{
-		BlockHash:          genesisHash,
-		Era:                types.ExtrinsicEra{IsMortalEra: false},
-		GenesisHash:        genesisHash,
-		Nonce:              types.NewUCompactFromUInt(uint64(nonce)),
-		SpecVersion:        runtimeVersion.SpecVersion,
-		Tip:                types.NewUCompactFromUInt(0),
-		TransactionVersion: runtimeVersion.TransactionVersion,
-	}
-
-	// Unsigned Payload
-	payload, err := createUnsignedPayload(&extrinsic, o)
-	if err != nil {
-		return nil, nil, fmt.Errorf("problem creating extrinsic payload: %w", err)
-	}
-	payloadBytes, err := types.EncodeToBytes(payload)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return nil, payloadBytes, nil
-}
-
-func (c *Connection) NewExtrinsic(from, to string, amount uint64) (*types.Extrinsic, error) {
+func (c *Connection) NewExtrinsic(sender signature.KeyringPair, to string, amount uint64) (*types.Extrinsic, error) {
 
 	meta, err := c.Api.RPC.State.GetMetadataLatest()
 	if err != nil {
@@ -118,29 +41,28 @@ func (c *Connection) NewExtrinsic(from, to string, amount uint64) (*types.Extrin
 		return nil, fmt.Errorf("problem getting latest version of runtime: %w", err)
 	}
 
-	// FIXME This is for testing only
-	// In Qredochain, we will not need a keypair, only the public key
-	fr, ok := signature.LoadKeyringPairFromEnv()
-	if !ok {
-		fr = signature.TestKeyringPairAlice
-	}
+	fmt.Printf("Sending from:\nPublic key: %#x\nAddress: %s", sender.PublicKey, sender.Address)
 
 	// Build a key that will be used to fetch account balance
-	key, err := types.CreateStorageKey(meta, "System", "Account", fr.PublicKey)
+	key, err := types.CreateStorageKey(meta, "System", "Account", sender.PublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("problem creating storage key: %w", err)
 	}
 
-	var accountInfo types.AccountInfo
+	var senderAccountInfo types.AccountInfo
 
 	// Sender's account info
-	ok, err = c.Api.RPC.State.GetStorageLatest(key, &accountInfo)
+	ok, err := c.Api.RPC.State.GetStorageLatest(key, &senderAccountInfo)
 	if err != nil || !ok {
-		return nil, fmt.Errorf("problem getting accountInfo: %w", err)
+		return nil, fmt.Errorf("problem getting senderAccountInfo: %w", err)
 	}
 
-	// Existing on-chain nonce held against this account
-	nonce := uint32(accountInfo.Nonce)
+	fmt.Printf("Sending account data\nBalance: %v\nNonce: %v\n",
+		senderAccountInfo.Data.Free,
+		senderAccountInfo.Nonce)
+
+	// Existing on-chain nonce held against the sending account
+	nonce := uint32(senderAccountInfo.Nonce)
 
 	// Set signature options.
 	o := types.SignatureOptions{
@@ -153,16 +75,16 @@ func (c *Connection) NewExtrinsic(from, to string, amount uint64) (*types.Extrin
 		TransactionVersion: runtimeVersion.TransactionVersion,
 	}
 
-	// Unsigned Payload
+	// Unsigned Payload - note that the entire Extrinsic is not signed, just the payload. The signature
+	// is then attached to the Extrinsic, embedded within a types.ExtrinsicSignatureV4.MultiSignature object.
 	payload, err := createUnsignedPayload(&extrinsic, o)
 	if err != nil {
 		return nil, fmt.Errorf("problem creating extrinsic payload: %w", err)
 	}
 
 	// signPayload is a placeholder for MPC signing functionality.
-	// TODO MPC signing
 	// NOTE GSRPC library can only sign messages using Sr25519 scheme.
-	signature, err := signPayload(payload, fr)
+	signature, err := signPayload(payload, sender)
 	if err != nil {
 		return nil, fmt.Errorf("error signing payload: %w", err)
 	}
@@ -174,7 +96,7 @@ func (c *Connection) NewExtrinsic(from, to string, amount uint64) (*types.Extrin
 	}
 
 	// Signer must be in MultiAddress format
-	signerPubKey := types.NewMultiAddressFromAccountID(fr.PublicKey)
+	signerPubKey := types.NewMultiAddressFromAccountID(sender.PublicKey)
 	fullSignature := types.ExtrinsicSignatureV4{
 		Signer:    signerPubKey,
 		Signature: types.MultiSignature{IsSr25519: true, AsSr25519: signature},
@@ -303,4 +225,81 @@ func signExtrinsic(extrinsic *(types.Extrinsic), signer signature.KeyringPair, o
 	(*extrinsic).Version |= types.ExtrinsicBitSigned
 
 	return nil
+}
+
+func (c *Connection) GenTransaction(currency int, from, to string, amount uint64) (tx *Transaction, toBeSigned []byte, err error) {
+	meta, err := c.Api.RPC.State.GetMetadataLatest()
+	if err != nil {
+		return nil, nil, fmt.Errorf("fetch metadata failed: %w", err)
+	}
+
+	// recipient is a MultiAddress struct which will be used to build a suitable Polkadot MultiAddress type.
+	// In our case, this will generally be a MultiAddress struct with fields set for `AsID` - containing
+	// the public key bytes and `IsID` - a boolean indicating the type of this MultiAddress.
+	recipient, err := types.NewMultiAddressFromHexAccountID(to)
+	if err != nil {
+		return nil, nil, fmt.Errorf("recipient set: %w", err)
+	}
+
+	call, err := types.NewCall(meta, "Balances.transfer", recipient, types.NewUCompactFromUInt(amount))
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem building new call: %w", err)
+	}
+
+	extrinsic := types.NewExtrinsic(call)
+
+	genesisHash, err := c.Api.RPC.Chain.GetBlockHash(0)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get block hash: %w", err)
+	}
+
+	runtimeVersion, err := c.Api.RPC.State.GetRuntimeVersionLatest()
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem getting latest version of runtime: %w", err)
+	}
+
+	// Build a key that will be used to fetch account balance
+	fromPubKey, err := PublicKeyFromAddress(from)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key, err := types.CreateStorageKey(meta, "System", "Account", fromPubKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem creating storage key: %w", err)
+	}
+
+	var senderAccountInfo types.AccountInfo
+
+	// Sender's account info
+	ok, err := c.Api.RPC.State.GetStorageLatest(key, &senderAccountInfo)
+	if err != nil || !ok {
+		return nil, nil, fmt.Errorf("problem getting senderAccountInfo: %w", err)
+	}
+
+	// Existing on-chain nonce held against this account
+	nonce := uint32(senderAccountInfo.Nonce)
+
+	// Set signature options.
+	o := types.SignatureOptions{
+		BlockHash:          genesisHash,
+		Era:                types.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              types.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        runtimeVersion.SpecVersion,
+		Tip:                types.NewUCompactFromUInt(0),
+		TransactionVersion: runtimeVersion.TransactionVersion,
+	}
+
+	// Unsigned Payload
+	payload, err := createUnsignedPayload(&extrinsic, o)
+	if err != nil {
+		return nil, nil, fmt.Errorf("problem creating extrinsic payload: %w", err)
+	}
+	payloadBytes, err := types.EncodeToBytes(payload)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return nil, payloadBytes, nil
 }

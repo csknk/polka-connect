@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/scale"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,11 +18,15 @@ func TestEncodeDecodeExtrinsic(t *testing.T) {
 		fmt.Println("No connection to node")
 		assert.FailNow(t, err.Error())
 	}
-	AlicePubkey := "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d" // 15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5
-	BobPubkey := "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48"   // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3
+	//	AlicePubkey := "0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d" // 15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5
+	BobPubkey := "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48" // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3
 	var amount uint64 = 4200000000
 
-	extrinsic, err := c.NewExtrinsic(AlicePubkey, BobPubkey, amount)
+	sender, ok := signature.LoadKeyringPairFromEnv()
+	if !ok {
+		sender = signature.TestKeyringPairAlice
+	}
+	extrinsic, err := c.NewExtrinsic(sender, BobPubkey, amount)
 	assert.NoError(t, err)
 
 	extrinsicString, err := types.EncodeToHexString(extrinsic)

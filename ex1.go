@@ -9,18 +9,27 @@ import (
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 )
 
+const (
+	fromPrivKeyHexstring = "0xb1b862df61c87139ed6d491b99a0a275fe69fd68b9765a4a442badb2cf2e8358" // Csknk
+	localRecipient       = "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48" // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3
+	westendRecipient     = "0x725b16b586c386cf524b067a0449eeef5efc20585f46fe1783db79f1c7cca101" // 5EeeNhoYmB8QKRJ1ffimtb5trLP3bG7gyc6B1cNcnBQCPXH2
+)
+
 func ex1() {
-	fromPrivKeyHexstring := "0xb1b862df61c87139ed6d491b99a0a275fe69fd68b9765a4a442badb2cf2e8358" // Csknk
-	// fromAddr := "15m88WrpqNhWQRWicU4WC4ArgrQ8SP7gJEd9X2SX2JdSiyRc"
-	//	toAddress := "14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3" // Bob
-	BobPubkey := "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48" // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3
-	toPubKeyHexstring := BobPubkey                                                    // Bob
+	// Local Alice/Bob 2 node testnet
+	// Westend
+
+	//	toPubKeyHexstring := localRecipient
+	toPubKeyHexstring := westendRecipient
 
 	// Display the events that occur during a transfer by sending a value to bob
 
 	// Instantiate the API
 	//	api, err := gsrpc.NewSubstrateAPI("https://westend-rpc.polkadot.io")
-	cfg := config.Default().RPCURL
+	localCfg := config.Default().RPCURL
+	_ = localCfg
+	cfg := "https://westend-rpc.polkadot.io"
+
 	api, err := gsrpc.NewSubstrateAPI(cfg)
 	if err != nil {
 		panic(err)
@@ -40,14 +49,14 @@ func ex1() {
 
 	//	fromPrivKey := "0x1f4b81480f9fc66e2e1e6db4849bf7dc0b5fbfe68e165d5e13178fe8af0a9d15"
 	fromPrivKey := fromPrivKeyHexstring
-	netwrokId := uint8(0)
-	fromKey, err := signature.KeyringPairFromSecret(fromPrivKey, netwrokId)
+	networkID := uint8(0)
+	fromKey, err := signature.KeyringPairFromSecret(fromPrivKey, networkID)
 
 	if err != nil {
 		panic(err)
 	}
 
-	amount := types.NewUCompactFromUInt(dotToPlank(1000))
+	amount := types.NewUCompactFromUInt(dotToPlank(1))
 
 	// Get the nonce for Alice
 	//	to, err := types.NewMultiAddressFromHexAccountID("0x4c4f0e86470be8bce081440c8b9cb2703bee894340173775442ae123d4fe1b71")
@@ -184,8 +193,4 @@ func ex1() {
 	// 		return
 	// 	}
 	// }
-}
-
-func dotToPlank(dotInput int) uint64 {
-	return uint64(dotInput * (1e10))
 }
