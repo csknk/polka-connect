@@ -22,7 +22,9 @@ const (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	// For local dev testnet use NewDefaultConnection()
-	nc, err := NewConnection("wss://westend-rpc.polkadot.io")
+	//	nc, err := NewConnection("wss://westend-rpc.polkadot.io")
+	//	nc, err := NewConnection("wss://rpc.pinknode.io/westend/explorer")
+	nc, err := NewDefaultConnection()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,8 +40,29 @@ func main() {
 
 	fmt.Println("sender: ", sender.Address)
 
-	if err := nc.Transfer(sender, WestendRecipient, dotToPlank(1)); err != nil {
+	//	if err := nc.Transfer(sender, WestendRecipient, dotToPlank(1)); err != nil {
+	//		log.Fatal(err)
+	//	}
+
+	//	results, err := nc.ChangedBlockHashes(BobPubkey, 0)
+	results, err := nc.GetChangeData(BobPubkey, 0)
+	if err != nil {
 		log.Fatal(err)
+	}
+	for _, result := range results {
+
+		fmt.Printf("ID: %s\nBlock: %#x\nAmount: %s\n", result.ID, result.blockHash, result.amountAtThisBlock.String())
+
+		//		fmt.Println("blockHash: ", result.Block.Hex())
+		//		for _, change := range result.Changes {
+		//			fmt.Printf("key: %v\n", change.StorageKey)
+		//			var accountInfo AccountInfo
+		//			types.DecodeFromBytes(change.StorageData, &accountInfo)
+		//			//			decoder.Decode(&accountInfo)
+		//
+		//			fmt.Printf("accountInfo: %s\n", accountInfo.Data.Free)
+		//
+		//		}
 	}
 
 	/*
