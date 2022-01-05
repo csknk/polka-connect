@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"math/big"
 
+	"github.com/centrifuge/go-substrate-rpc-client/v4/scale"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/vedhavyas/go-subkey"
 )
@@ -115,7 +118,8 @@ func (c *Connection) FilterBlockForRequiredExtrinsics(blockHashBytes, accountID 
 	if err != nil {
 		return fmt.Errorf("error getting meta data latest: %w", err)
 	}
-	//callIndex, err := meta.FindCallIndex("Balances.transfer")
+	// NOTE: Assumes that the transfer was made using transfer_keep_alive call. It's possible that the
+	// transfer used "Balances.transfer" so we should allow either.
 	callIndex, err := meta.FindCallIndex("Balances.transfer_keep_alive")
 	if err != nil {
 		return fmt.Errorf("error getting callIndex: %w", err)
@@ -128,12 +132,41 @@ func (c *Connection) FilterBlockForRequiredExtrinsics(blockHashBytes, accountID 
 			continue
 		}
 
+		signerPubKey := []byte(extrinsic.Signature.Signer.AsID[:])
+		fmt.Println(signerPubKey)
+
 		fmt.Printf("processing extrinsic %v in block %#x\n", i, blockHashBytes)
 		h, _ := types.GetHash(extrinsic)
 		fmt.Printf("from GetHash: %#x\n", h)
 		who := extrinsic.Signature.Signer.AsID
 		fmt.Printf("extrinsic %d signed by: %#x\n", i, who)
+
+		decodedArgs, err := DecodeExtrinsicArgs(&extrinsic)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(decodedArgs)
 	}
+	return nil
+}
+
+func (c *Connection) DecodeEvents(blockHashBytes []byte) error {
+	blockHash := types.NewHash(blockHashBytes)
+
+	block, err := c.GetBlockByHash(blockHash)
+	if err != nil {
+		return fmt.Errorf("error getting block for hash %s: %#x", blockHash, err)
+	}
+	if block.Block.Header.Number == 0 {
+		return fmt.Errorf("can't get data for block hash %s - it may not exist", blockHashString)
+	}
+
+	meta, err := c.getMetadata(blockHash)
+	if err != nil {
+		return fmt.Errorf("error getting meta data latest: %w", err)
+	}
+	_ = meta // TODO: remove
 	/*
 		// TODO: unable to decode field 4 event #2 with EventID [5 8], field Balances_Withdraw:
 		// expected more bytes, but could not decode any more - problem with custom
@@ -162,6 +195,54 @@ func (c *Connection) FilterBlockForRequiredExtrinsics(blockHashBytes, accountID 
 		}
 	*/
 	return nil
+}
+
+func DecodeExtrinsicArgs(extrinsic *types.Extrinsic) (*ExtrinsicArgs, error) {
+	hash, err := types.GetHash(extrinsic)
+	if err != nil {
+		return nil, fmt.Errorf("problem getting extrinsic hash: %w", err)
+	}
+	txHash := hash[:]
+
+	argsDecoder := scale.NewDecoder(bytes.NewReader(extrinsic.Method.Args))
+	nCalls, err := argsDecoder.DecodeUintCompact()
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode call count for extrinsic %#x: %w", txHash, err)
+	}
+
+	accountID := types.AccountID{}
+	err = argsDecoder.Decode(&accountID)
+	if err != nil {
+		return nil, fmt.Errorf("problem accountID for extrinsic %#x: %w", txHash, err)
+	}
+
+	amount, err := argsDecoder.DecodeUintCompact()
+	if err != nil {
+		return nil, fmt.Errorf("problem decoding amount for extrinsic %#x: %w", txHash, err)
+	}
+
+	return &ExtrinsicArgs{
+		Amount:         *amount,
+		NCalls:         *nCalls,
+		ReceiverPubKey: []byte(accountID[:]),
+		TxHash:         txHash,
+	}, nil
+}
+
+type ExtrinsicArgs struct {
+	NCalls         big.Int
+	Amount         big.Int
+	ReceiverPubKey []byte
+	TxHash         []byte
+}
+
+func (ext ExtrinsicArgs) String() string {
+	return fmt.Sprintf("NCalls: %d\nAmount: %d\nReceiver PubKey: %#x\nTxHash: %#x\n",
+		ext.NCalls.Int64(),
+		ext.Amount.Int64(),
+		ext.ReceiverPubKey,
+		ext.TxHash,
+	)
 }
 
 // EventRecords is a default set of possible event records that can be used as a target for
