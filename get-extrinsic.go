@@ -148,6 +148,12 @@ func (c *Connection) FilterBlockForRequiredExtrinsics(blockHashBytes, accountID 
 
 		fmt.Println(decodedArgs)
 	}
+	timestamp, err := c.GetBlockTimestamp(block, blockHash)
+	if err != nil {
+		return fmt.Errorf("timestamp: %w", err)
+	}
+	fmt.Println("timestamp: ", timestamp)
+
 	return nil
 }
 

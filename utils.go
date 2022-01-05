@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math/big"
+	"time"
 
 	"github.com/btcsuite/btcutil/base58"
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/config"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/scale"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -71,4 +75,33 @@ func printLatestBlockHash() {
 
 func dotToPlank(dotInput int) uint64 {
 	return uint64(dotInput * (1e10))
+}
+
+func (c *Connection) GetBlockTimestamp(block *types.SignedBlock, blockHash types.Hash) (*time.Time, error) {
+
+	meta, err := c.getMetadata(blockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	callIndex, err := meta.FindCallIndex("Timestamp.set")
+	if err != nil {
+		return nil, err
+	}
+
+	timestamp := new(big.Int)
+	for _, extrinsic := range block.Block.Extrinsics {
+		if extrinsic.Method.CallIndex != callIndex {
+			continue
+		}
+		timeDecoder := scale.NewDecoder(bytes.NewReader(extrinsic.Method.Args))
+		timestamp, err = timeDecoder.DecodeUintCompact()
+		if err != nil {
+			return nil, err
+		}
+		break
+	}
+
+	time := time.UnixMilli(timestamp.Int64())
+	return &time, nil
 }
