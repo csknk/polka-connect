@@ -105,3 +105,9 @@ func (c *Connection) GetBlockTimestamp(block *types.SignedBlock, blockHash types
 	time := time.UnixMilli(timestamp.Int64())
 	return &time, nil
 }
+
+// HashToBytes converts types.Hash to a []byte.
+// rawBytes := hashType[:]
+func HashToBytes(hash types.Hash) []byte {
+	return hash[:]
+}

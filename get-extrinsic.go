@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/scale"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/vedhavyas/go-subkey"
+	"golang.org/x/crypto/blake2b"
 )
 
 var (
@@ -103,27 +106,34 @@ type Fee struct {
 	PartialFee string
 }
 
-func (c *Connection) FilterBlockForRequiredExtrinsics(blockHashBytes, accountID []byte) error {
+func (c *Connection) GetRequiredExtrinsicsFromBlockHash(blockHashBytes, accountID []byte) error {
 	blockHash := types.NewHash(blockHashBytes)
-
-	block, err := c.GetBlockByHash(blockHash)
-	if err != nil {
-		return fmt.Errorf("error getting block for hash %s: %#x", blockHash, err)
-	}
-	if block.Block.Header.Number == 0 {
-		return fmt.Errorf("can't get data for block hash %s - it may not exist", blockHashString)
-	}
-
 	meta, err := c.getMetadata(blockHash)
 	if err != nil {
 		return fmt.Errorf("error getting meta data latest: %w", err)
 	}
+	block, err := c.GetBlockByHash(blockHash)
+	if err != nil {
+		return fmt.Errorf("error getting block for hash %s: %#x", blockHash, err)
+	}
+	return c.GetRequiredExtrinsics(block, meta, blockHash, accountID)
+}
+
+func (c *Connection) GetRequiredExtrinsics(block *types.SignedBlock, meta *types.Metadata, blockHash types.Hash, accountID []byte) error {
+
+	if block.Block.Header.Number == 0 {
+		return fmt.Errorf("can't get data for block hash %s - it may not exist", blockHashString)
+	}
+
 	// NOTE: Assumes that the transfer was made using transfer_keep_alive call. It's possible that the
 	// transfer used "Balances.transfer" so we should allow either.
 	callIndex, err := meta.FindCallIndex("Balances.transfer_keep_alive")
 	if err != nil {
 		return fmt.Errorf("error getting callIndex: %w", err)
 	}
+
+	height := uint64(block.Block.Header.Number)
+	fmt.Printf("Height: %d\n", height)
 
 	for i, extrinsic := range block.Block.Extrinsics {
 		fmt.Println("extrinsic ", i)
@@ -135,7 +145,12 @@ func (c *Connection) FilterBlockForRequiredExtrinsics(blockHashBytes, accountID 
 		signerPubKey := []byte(extrinsic.Signature.Signer.AsID[:])
 		fmt.Println(signerPubKey)
 
-		fmt.Printf("processing extrinsic %v in block %#x\n", i, blockHashBytes)
+		//		fmt.Printf("processing extrinsic %v in block %#x\n", i, blockHashBytes)
+		fmt.Printf("processing extrinsic %v in block %#x\n", i, blockHash)
+		bBytes, _ := types.EncodeToBytes(block.Block.Header)
+		testHash := blake2b.Sum256(bBytes)
+
+		fmt.Printf("processing extrinsic %v in block %#x\n", i, testHash)
 		h, _ := types.GetHash(extrinsic)
 		fmt.Printf("from GetHash: %#x\n", h)
 		who := extrinsic.Signature.Signer.AsID
@@ -157,50 +172,119 @@ func (c *Connection) FilterBlockForRequiredExtrinsics(blockHashBytes, accountID 
 	return nil
 }
 
-func (c *Connection) DecodeEvents(blockHashBytes []byte) error {
-	blockHash := types.NewHash(blockHashBytes)
+var (
+	allowedCalls = map[string]bool{
+		"Balances.transfer_keep_alive": true,
+		"Balances.transfer":            true,
+	}
+)
 
+func (c *Connection) GetTxEvents(blockHashBytes []byte, accountID string) error {
+	blockHash := types.NewHash(blockHashBytes)
 	block, err := c.GetBlockByHash(blockHash)
 	if err != nil {
 		return fmt.Errorf("error getting block for hash %s: %#x", blockHash, err)
 	}
-	if block.Block.Header.Number == 0 {
-		return fmt.Errorf("can't get data for block hash %s - it may not exist", blockHashString)
+	txEvents, err := c.BuildTxEventFromBlock(block, blockHash, accountID)
+	if err != nil {
+		return fmt.Errorf("error BuildTxEventFromBlock%#x: %w", blockHashBytes, err)
+	}
+	for i, txEvent := range txEvents {
+		fmt.Println(i, ": ")
+		fmt.Println(txEvent)
+
+	}
+	return nil
+}
+
+func (c *Connection) BuildTxEventFromBlock(block *types.SignedBlock, blockHash types.Hash, receiverAddress string) ([]*TxEvent, error) {
+
+	receiverPubKey, err := PublicKeyFromAddress(receiverAddress)
+	if err != nil {
+		return nil, err
 	}
 
 	meta, err := c.getMetadata(blockHash)
 	if err != nil {
-		return fmt.Errorf("error getting meta data latest: %w", err)
+		return nil, err
 	}
-	_ = meta // TODO: remove
-	/*
-		// TODO: unable to decode field 4 event #2 with EventID [5 8], field Balances_Withdraw:
-		// expected more bytes, but could not decode any more - problem with custom
-		// EventBalancesWithdraw struct 0- check Rust ref for the required data types...
-		//
 
-		key, err := types.CreateStorageKey(meta, "System", "Events", nil, nil)
+	// TODO: Move string literal to constant
+	//	callIndex, err := meta.FindCallIndex("Balances.transfer_keep_alive")
+	allowedCalls, err := c.BuildAllowedCallIndexes(allowedCalls, meta)
+	if err != nil {
+		return nil, fmt.Errorf("error getting callIndex: %w", err)
+	}
+
+	txEvents := []*TxEvent{}
+	for i, extrinsic := range block.Block.Extrinsics {
+		//		if extrinsic.Method.CallIndex != callIndex {
+		// TODO Must do deep compare here...
+		if _, ok := allowedCalls[extrinsic.Method.CallIndex]; !ok {
+			continue
+		}
+
+		decodedArgs, err := DecodeExtrinsicArgs(&extrinsic)
 		if err != nil {
-			return fmt.Errorf("error creating storage key: %w", err)
+			return nil, err
 		}
 
-		raw, err := c.Api.RPC.State.GetStorageRaw(key, blockHash)
+		if !bytes.Equal(decodedArgs.ReceiverPubKey, receiverPubKey) {
+			continue
+		}
+
+		txEvent := new(TxEvent)
+
+		timestamp, err := c.GetBlockTimestamp(block, blockHash)
 		if err != nil {
-			return fmt.Errorf("error retrieving raw storage data for key %v: %w", key, err)
+			return nil, err
 		}
 
-		//	events := types.EventRecords{}
-		events := EventRecords{}
-		err = types.EventRecordsRaw(*raw).DecodeEventRecords(meta, &events)
+		txEvent.TimeStamp = *timestamp
+		txEvent.BlockHash = hex.EncodeToString(blockHash[:])
+		txEvent.Hash = hex.EncodeToString(decodedArgs.TxHash)
+		txEvent.TransactionIndex = i
+		txEvent.BlockHeight = uint64(block.Block.Header.Number)
+		txEvent.Value = decodedArgs.Amount.Int64()
+
+		txEvents = append(txEvents, txEvent)
+	}
+
+	return txEvents, nil
+}
+
+type TxEvent struct {
+	BlockHash        string    `json:"block_hash"` // Hash of the  L1 block which includes this transaction
+	TimeStamp        time.Time `json:"timeStamp"`
+	Hash             string    `json:"hash"` // Hash of the current Extrinsic
+	From             string    `json:"from"`
+	To               string    `json:"to"`
+	TransactionIndex int       `json:"transaction_index,string"` // Index of the Extrinsic in the L1 block
+	BlockHeight      uint64    `json:"block_height,string"`
+	Confirmations    uint64    `json:"confirmations,string"`
+	Value            int64     `json:"value,string"` // Should be big.Int?
+}
+
+func (tx TxEvent) String() string {
+	return fmt.Sprintf("BlockHash: %s\nValue: %d\nReceiver PubKey: %s\nTxHash: %s\nTimestamp: %s\n",
+		tx.BlockHash,
+		tx.Value,
+		tx.To,
+		tx.Hash,
+		tx.TimeStamp.String(),
+	)
+}
+
+func (c *Connection) BuildAllowedCallIndexes(allowedCalls map[string]bool, meta *types.Metadata) (map[types.CallIndex]bool, error) {
+	callIndexes := map[types.CallIndex]bool{}
+	for callIndexString, _ := range allowedCalls {
+		callIndex, err := meta.FindCallIndex(callIndexString)
 		if err != nil {
-			return fmt.Errorf("error decoding event records for %v: %w", *raw, err)
+			return nil, err
 		}
-		for _, event := range events.Balances_Transfer {
-			fmt.Println("event.Value = ", event.Value)
-
-		}
-	*/
-	return nil
+		callIndexes[callIndex] = true
+	}
+	return callIndexes, nil
 }
 
 func DecodeExtrinsicArgs(extrinsic *types.Extrinsic) (*ExtrinsicArgs, error) {
@@ -217,10 +301,12 @@ func DecodeExtrinsicArgs(extrinsic *types.Extrinsic) (*ExtrinsicArgs, error) {
 	}
 
 	accountID := types.AccountID{}
+	//	multiAddress := types.MultiAddress{}
 	err = argsDecoder.Decode(&accountID)
 	if err != nil {
 		return nil, fmt.Errorf("problem accountID for extrinsic %#x: %w", txHash, err)
 	}
+	//	accountID := multiAddress.AsID
 
 	amount, err := argsDecoder.DecodeUintCompact()
 	if err != nil {
@@ -418,4 +504,61 @@ type EventBalancesWithdraw struct {
 	To     types.AccountID
 	Value  types.U128
 	Topics []types.Hash
+}
+
+func (c *Connection) DecodeEvents(blockHashBytes []byte) error {
+	blockHash := types.NewHash(blockHashBytes)
+
+	block, err := c.GetBlockByHash(blockHash)
+	if err != nil {
+		return fmt.Errorf("error getting block for hash %s: %#x", blockHash, err)
+	}
+	if block.Block.Header.Number == 0 {
+		return fmt.Errorf("can't get data for block hash %s - it may not exist", blockHashString)
+	}
+
+	meta, err := c.getMetadata(blockHash)
+	if err != nil {
+		return fmt.Errorf("error getting meta data latest: %w", err)
+	}
+	_ = meta // TODO: remove
+	/*
+		// TODO: unable to decode field 4 event #2 with EventID [5 8], field Balances_Withdraw:
+		// expected more bytes, but could not decode any more - problem with custom
+		// EventBalancesWithdraw struct 0- check Rust ref for the required data types...
+		//
+
+		key, err := types.CreateStorageKey(meta, "System", "Events", nil, nil)
+		if err != nil {
+			return fmt.Errorf("error creating storage key: %w", err)
+		}
+
+		raw, err := c.Api.RPC.State.GetStorageRaw(key, blockHash)
+		if err != nil {
+			return fmt.Errorf("error retrieving raw storage data for key %v: %w", key, err)
+		}
+
+		//	events := types.EventRecords{}
+		events := EventRecords{}
+		err = types.EventRecordsRaw(*raw).DecodeEventRecords(meta, &events)
+		if err != nil {
+			return fmt.Errorf("error decoding event records for %v: %w", *raw, err)
+		}
+		for _, event := range events.Balances_Transfer {
+			fmt.Println("event.Value = ", event.Value)
+
+		}
+	*/
+	return nil
+}
+
+type ExtrinsicData struct {
+	Timestamp        time.Time
+	Amount           big.Int
+	From             []byte
+	To               []byte
+	TransactionIndex int
+	BlockHeight      uint64
+	Confirmations    int
+	Value            big.Int
 }
