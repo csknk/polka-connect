@@ -106,6 +106,15 @@ func (c *Connection) GetBlockTimestamp(block *types.SignedBlock, blockHash types
 	return &time, nil
 }
 
+// ChainHeight fetches the latest block header and returns the block number (the chain height).
+func (c *Connection) ChainHeight() (uint64, error) {
+	header, err := c.Api.RPC.Chain.GetHeaderLatest()
+	if err != nil {
+		return 1, fmt.Errorf("failed to retrieve Polkadot latest header: %w", err)
+	}
+	return uint64(header.Number), nil
+}
+
 // HashToBytes converts types.Hash to a []byte.
 // rawBytes := hashType[:]
 func HashToBytes(hash types.Hash) []byte {

@@ -189,10 +189,8 @@ func (c *Connection) GetTxEvents(blockHashBytes []byte, accountID string) error 
 	if err != nil {
 		return fmt.Errorf("error BuildTxEventFromBlock%#x: %w", blockHashBytes, err)
 	}
-	for i, txEvent := range txEvents {
-		fmt.Println(i, ": ")
-		fmt.Println(txEvent)
-
+	for _, txEvent := range txEvents {
+		fmt.Printf("%s\n", txEvent)
 	}
 	return nil
 }
@@ -209,8 +207,7 @@ func (c *Connection) BuildTxEventFromBlock(block *types.SignedBlock, blockHash t
 		return nil, err
 	}
 
-	// TODO: Move string literal to constant
-	//	callIndex, err := meta.FindCallIndex("Balances.transfer_keep_alive")
+	// TODO: Build once on initialisation of the Connection and store as a field.
 	allowedCalls, err := c.BuildAllowedCallIndexes(allowedCalls, meta)
 	if err != nil {
 		return nil, fmt.Errorf("error getting callIndex: %w", err)
@@ -218,15 +215,16 @@ func (c *Connection) BuildTxEventFromBlock(block *types.SignedBlock, blockHash t
 
 	txEvents := []*TxEvent{}
 	for i, extrinsic := range block.Block.Extrinsics {
-		//		if extrinsic.Method.CallIndex != callIndex {
-		// TODO Must do deep compare here...
+
+		// Only allowed calls - those relating to balance transfer.
 		if _, ok := allowedCalls[extrinsic.Method.CallIndex]; !ok {
 			continue
 		}
 
+		// This must take place before the guard since we need to know the recipient ID
 		decodedArgs, err := DecodeExtrinsicArgs(&extrinsic)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding Extrinsic arguments for Extrinsic %d in block %s: %w", i, blockHash, err)
 		}
 
 		if !bytes.Equal(decodedArgs.ReceiverPubKey, receiverPubKey) {
@@ -240,38 +238,117 @@ func (c *Connection) BuildTxEventFromBlock(block *types.SignedBlock, blockHash t
 			return nil, err
 		}
 
-		txEvent.TimeStamp = *timestamp
+		receivingPubkey := hex.EncodeToString(decodedArgs.ReceiverPubKey)
+		sendingPubkey := hex.EncodeToString(extrinsic.Signature.Signer.AsID[:])
+		currentHeight, err := c.ChainHeight()
+		if err != nil {
+			return nil, err
+		}
+
 		txEvent.BlockHash = hex.EncodeToString(blockHash[:])
+		txEvent.TimeStamp = *timestamp
 		txEvent.Hash = hex.EncodeToString(decodedArgs.TxHash)
+		txEvent.Value = decodedArgs.Amount.Int64()
+		txEvent.From = sendingPubkey
+		txEvent.To = receivingPubkey
 		txEvent.TransactionIndex = i
 		txEvent.BlockHeight = uint64(block.Block.Header.Number)
-		txEvent.Value = decodedArgs.Amount.Int64()
+		txEvent.Confirmations = currentHeight - txEvent.BlockHeight
 
 		txEvents = append(txEvents, txEvent)
+		err = c.GetFeePaid(blockHash, meta)
+		if err != nil {
+			return nil, fmt.Errorf("error getting event: %w", err)
+		}
+
 	}
 
 	return txEvents, nil
 }
 
+func (c *Connection) GetFeePaid(blockHash types.Hash, meta *types.Metadata) error {
+	key, err := types.CreateStorageKey(meta, "System", "Events", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	events := EventRecords{}
+	raw, err := c.Api.RPC.State.GetStorageRaw(key, blockHash)
+	if err != nil {
+		return err
+	}
+
+	err = types.EventRecordsRaw(*raw).DecodeEventRecords(meta, &events)
+	if err != nil {
+		return err
+	}
+
+	// Get the block
+	block, err := c.Api.RPC.Chain.GetBlock(blockHash)
+	if err != nil {
+		return err
+	}
+
+	for _, event := range events.Balances_Transfer {
+		ext := block.Block.Extrinsics[int(event.Phase.AsApplyExtrinsic)]
+		fmt.Printf("ext : %+v\n", ext)
+
+		fmt.Printf("nonce : %+v\n", ext.Signature.Nonce)
+
+		fmt.Printf("tip : %+v\n", ext.Signature.Tip)
+
+		extBytes, err := types.EncodeToHexString(ext)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(extBytes)
+		resInter := Fee{}
+		err = c.Api.Client.Call(&resInter, "payment_queryInfo", ext, blockHash.Hex())
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("++++PartialFee: ", resInter.PartialFee)
+	}
+
+	return nil
+}
+
 type TxEvent struct {
 	BlockHash        string    `json:"block_hash"` // Hash of the  L1 block which includes this transaction
 	TimeStamp        time.Time `json:"timeStamp"`
-	Hash             string    `json:"hash"` // Hash of the current Extrinsic
-	From             string    `json:"from"`
-	To               string    `json:"to"`
+	Hash             string    `json:"hash"`                     // Hash of the current Extrinsic
+	From             string    `json:"from"`                     // Hexstring of PubKey
+	To               string    `json:"to"`                       // Hexstring of PubKey
 	TransactionIndex int       `json:"transaction_index,string"` // Index of the Extrinsic in the L1 block
 	BlockHeight      uint64    `json:"block_height,string"`
 	Confirmations    uint64    `json:"confirmations,string"`
-	Value            int64     `json:"value,string"` // Should be big.Int?
+	Value            int64     `json:"value,string"` // TODO: Should this be big.Int?
 }
 
 func (tx TxEvent) String() string {
-	return fmt.Sprintf("BlockHash: %s\nValue: %d\nReceiver PubKey: %s\nTxHash: %s\nTimestamp: %s\n",
+	formatString :=
+		"BlockHash: %s\n" +
+			"Timestamp: %s\n" +
+			"Hash: %s\n" +
+			"Value: %d\n" +
+			"From: %s\n" +
+			"To: %s\n" +
+			"TransactionIndex: %d\n" +
+			"BlockHeight: %d\n" +
+			"Confirmations: %d\n"
+
+	return fmt.Sprintf(formatString,
 		tx.BlockHash,
-		tx.Value,
-		tx.To,
-		tx.Hash,
 		tx.TimeStamp.String(),
+		tx.Hash,
+		tx.Value,
+		tx.From,
+		tx.To,
+		tx.TransactionIndex,
+		tx.BlockHeight,
+		tx.Confirmations,
 	)
 }
 
@@ -499,9 +576,9 @@ type EventRecords struct {
 
 // EventBalancesTransfer is emitted when a transfer succeeded (from, to, value)
 type EventBalancesWithdraw struct {
-	Phase  types.Phase
-	From   types.AccountID
-	To     types.AccountID
+	Phase types.Phase
+	From  types.AccountID
+	//	To     types.AccountID
 	Value  types.U128
 	Topics []types.Hash
 }

@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	blockHashStr    = "0xb04e829829839222390ddef80d53e06d6eb3cd49a31f346d4e9c324d80fa6538"
+	blockHashStr    = "0x51b3569c9e21b600c689fbe68d56ceaf8f157e0742c6110dc7664686e0333b6b"
 	receiverPubKey  = "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48" // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3 Bob
 	receiverAddress = "14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3"
 )
