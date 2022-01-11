@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/scale"
@@ -315,6 +316,113 @@ func (c *Connection) GetFeePaid(blockHash types.Hash, meta *types.Metadata) erro
 	return nil
 }
 
+//type FeeInter struct {
+//	Weight     types.Weight
+//	Class      string
+//	PartialFee string
+//}
+
+// GetData gets data for a watched address in a given Block
+func (c *Connection) GetData(blockHash types.Hash, receiverAddress string) error {
+	receiverPubKey, err := PublicKeyFromAddress(receiverAddress)
+	if err != nil {
+		return err
+	}
+
+	meta, err := c.getMetadata(blockHash)
+	if err != nil {
+		return err
+	}
+
+	key, err := types.CreateStorageKey(meta, "System", "Events", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	events := EventRecords{}
+	raw, err := c.Api.RPC.State.GetStorageRaw(key, blockHash)
+	if err != nil {
+		return err
+	}
+
+	err = types.EventRecordsRaw(*raw).DecodeEventRecords(meta, &events)
+	if err != nil {
+		return err
+	}
+
+	// Get the block
+	block, err := c.Api.RPC.Chain.GetBlock(blockHash)
+	if err != nil {
+		return err
+	}
+
+	txEvents := []*TxEvent{}
+	for _, event := range events.Balances_Transfer {
+		if !bytes.Equal(event.To[:], receiverPubKey) {
+			continue
+		}
+
+		index := int(event.Phase.AsApplyExtrinsic)
+		extrinsic := block.Block.Extrinsics[index]
+//		fmt.Printf("ext : %+v\n", extrinsic)
+//		fmt.Printf("nonce : %+v\n", extrinsic.Signature.Nonce)
+//		fmt.Printf("tip : %+v\n", extrinsic.Signature.Tip)
+
+		resInter := Fee{}
+		err = c.Api.Client.Call(&resInter, "payment_queryInfo", extrinsic, blockHash.Hex())
+		if err != nil {
+			return err
+		}
+		fmt.Println("PartialFee: ", resInter.PartialFee)
+		partialFee, err := strconv.ParseInt(resInter.PartialFee, 10, 64)
+		if err != nil {
+			return err
+		}
+
+		// ---------
+		decodedArgs, err := DecodeExtrinsicArgs(&extrinsic)
+		if err != nil {
+			return fmt.Errorf("error decoding Extrinsic arguments for Extrinsic %d in block %s: %w", index, blockHash, err)
+		}
+
+		if !bytes.Equal(decodedArgs.ReceiverPubKey, receiverPubKey) {
+			continue
+		}
+
+		txEvent := new(TxEvent)
+
+		timestamp, err := c.GetBlockTimestamp(block, blockHash)
+		if err != nil {
+			return err
+		}
+
+		receivingPubkey := hex.EncodeToString(decodedArgs.ReceiverPubKey)
+		sendingPubkey := hex.EncodeToString(extrinsic.Signature.Signer.AsID[:])
+		currentHeight, err := c.ChainHeight()
+		if err != nil {
+			return err
+		}
+
+		txEvent.BlockHash = hex.EncodeToString(blockHash[:])
+		txEvent.TimeStamp = *timestamp
+		txEvent.Hash = hex.EncodeToString(decodedArgs.TxHash)
+		txEvent.Value = decodedArgs.Amount.Int64()
+		txEvent.From = sendingPubkey
+		txEvent.To = receivingPubkey
+		txEvent.TransactionIndex = index
+		txEvent.BlockHeight = uint64(block.Block.Header.Number)
+		txEvent.Confirmations = currentHeight - txEvent.BlockHeight
+		txEvent.Fee = partialFee + extrinsic.Signature.Tip.Int64()
+		fmt.Println("---")
+		fmt.Println(txEvent)
+		fmt.Println("---")
+
+		txEvents = append(txEvents, txEvent)
+	}
+
+	return nil
+}
+
 type TxEvent struct {
 	BlockHash        string    `json:"block_hash"` // Hash of the  L1 block which includes this transaction
 	TimeStamp        time.Time `json:"timeStamp"`
@@ -325,6 +433,7 @@ type TxEvent struct {
 	BlockHeight      uint64    `json:"block_height,string"`
 	Confirmations    uint64    `json:"confirmations,string"`
 	Value            int64     `json:"value,string"` // TODO: Should this be big.Int?
+	Fee              int64     `json:"fee"`
 }
 
 func (tx TxEvent) String() string {
@@ -337,7 +446,8 @@ func (tx TxEvent) String() string {
 			"To: %s\n" +
 			"TransactionIndex: %d\n" +
 			"BlockHeight: %d\n" +
-			"Confirmations: %d\n"
+			"Confirmations: %d\n" +
+			"Fee: %d\n"
 
 	return fmt.Sprintf(formatString,
 		tx.BlockHash,
@@ -349,6 +459,7 @@ func (tx TxEvent) String() string {
 		tx.TransactionIndex,
 		tx.BlockHeight,
 		tx.Confirmations,
+		tx.Fee,
 	)
 }
 
