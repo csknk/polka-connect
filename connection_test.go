@@ -19,7 +19,7 @@ type Result struct {
 }
 
 func TestGetHeight(t *testing.T) {
-	nc, err := NewDefaultConnection()
+	nc, err := NewConnection("http://dot-testnet.qredo.loc:9934")
 	assert.NoError(t, err)
 	height, err := nc.Height()
 	assert.NoError(t, err)

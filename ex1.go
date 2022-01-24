@@ -65,7 +65,8 @@ func ex1() {
 		panic(err)
 	}
 
-	c, err := types.NewCall(meta, "Balances.transfer", to, amount)
+	// c, err := types.NewCall(meta, "Balances.transfer", to, amount)
+	c, err := NewCall(BalanceTransferCallIndex, to, amount)
 	if err != nil {
 		panic(err)
 	}
