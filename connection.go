@@ -34,6 +34,7 @@ type Connection struct {
 	Api *gsrpc.SubstrateAPI
 }
 
+// NewDefaultConnection provides a GSRPC API connection to a Substrate node using the default address.
 func NewDefaultConnection() (*Connection, error) {
 	return NewConnection("")
 }
@@ -185,9 +186,7 @@ func (c *Connection) QueryStorageAt(address string, startBlockHash types.Hash) (
 
 	storage, err = c.Api.RPC.State.QueryStorageLatest([]types.StorageKey{key}, startBlockHash)
 	if err != nil {
-		fmt.Println("storage return")
-		fmt.Println("err:", err)
-
+		err = fmt.Errorf("QueryStorageLatest error, startBlockHash %#x: %w", startBlockHash, err)
 		return
 	}
 	//	fmt.Println("storage: ", storage)

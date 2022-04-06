@@ -1,54 +1,52 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
+	"log"
 
-	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/config"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 )
 
 const (
-	fromPrivKeyHexstring = "0xb1b862df61c87139ed6d491b99a0a275fe69fd68b9765a4a442badb2cf2e8358" // Csknk
-	localRecipient       = "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48" // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3
-	westendRecipient     = "0x725b16b586c386cf524b067a0449eeef5efc20585f46fe1783db79f1c7cca101" // 5EeeNhoYmB8QKRJ1ffimtb5trLP3bG7gyc6B1cNcnBQCPXH2
+	fromPrivKeyHexstring          = "0xb1b862df61c87139ed6d491b99a0a275fe69fd68b9765a4a442badb2cf2e8358" // 5GppzBbkybS2xtWCeq1W3uLhqEQUk5ZYDjtfMjTAUDbvYboo Csknk
+	fromAddress                   = "5GppzBbkybS2xtWCeq1W3uLhqEQUk5ZYDjtfMjTAUDbvYboo"                   // Csknk
+	localRecipient                = "0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48" // 14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3
+	westendRecipientPubkey        = "0x725b16b586c386cf524b067a0449eeef5efc20585f46fe1783db79f1c7cca101" // 5EeeNhoYmB8QKRJ1ffimtb5trLP3bG7gyc6B1cNcnBQCPXH2
+	csknkTest2                    = "0xc526d8efca9e85fdce82c6ee694b9690e16c5552b9d276dbe7fe43f7607d4c09" // 5GXCq8BcEzNrmqQN5avx3wARnMBcRyMJzJ5BeT9WrDukpErh"
+	inclusionFee           uint64 = 0.0156 * 1e12
 )
 
 func ex1() {
-	// Local Alice/Bob 2 node testnet
-	// Westend
-
-	//	toPubKeyHexstring := localRecipient
-	toPubKeyHexstring := westendRecipient
-
-	// Display the events that occur during a transfer by sending a value to bob
-
-	// Instantiate the API
-	//	api, err := gsrpc.NewSubstrateAPI("https://westend-rpc.polkadot.io")
-	localCfg := config.Default().RPCURL
-	_ = localCfg
+	toPubKeyHexstring := csknkTest2 //westendRecipient
+	fromPrivKey := fromPrivKeyHexstring
 	cfg := "https://westend-rpc.polkadot.io"
 
-	api, err := gsrpc.NewSubstrateAPI(cfg)
+	nc, err := NewConnection(cfg)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
+	api := nc.Api
+	senderPubkey, err := PublicKeyFromAddress(fromAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	availableBalance, err := nc.GetBalance(hex.EncodeToString(senderPubkey))
+	if err != nil {
+		log.Fatal(err)
+	}
+	//	var availableBalance float64 = 0.1607
+	var maxSpendable uint64 = availableBalance.Uint64() - inclusionFee
+	//	amount := types.NewUCompactFromUInt(westendToBase(maxSpendable))
+	amount := types.NewUCompactFromUInt(maxSpendable)
 
 	meta, err := api.RPC.State.GetMetadataLatest()
 	if err != nil {
 		panic(err)
 	}
 
-	// Create a call, transferring 12345 units to Bob
-	//	from, err := types.NewMultiAddressFromHexAccountID("0x1f4b81480f9fc66e2e1e6db4849bf7dc0b5fbfe68e165d5e13178fe8af0a9d15")
-	//	from, err := types.NewMultiAddressFromHexAccountID(fromPubKeyHexstring)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-
-	//	fromPrivKey := "0x1f4b81480f9fc66e2e1e6db4849bf7dc0b5fbfe68e165d5e13178fe8af0a9d15"
-	fromPrivKey := fromPrivKeyHexstring
 	networkID := uint8(0)
 	fromKey, err := signature.KeyringPairFromSecret(fromPrivKey, networkID)
 
@@ -56,10 +54,7 @@ func ex1() {
 		panic(err)
 	}
 
-	amount := types.NewUCompactFromUInt(dotToPlank(1))
-
 	// Get the nonce for Alice
-	//	to, err := types.NewMultiAddressFromHexAccountID("0x4c4f0e86470be8bce081440c8b9cb2703bee894340173775442ae123d4fe1b71")
 	to, err := types.NewMultiAddressFromHexAccountID(toPubKeyHexstring)
 	if err != nil {
 		panic(err)
@@ -87,7 +82,6 @@ func ex1() {
 	}
 
 	// Build a key that will be used to fetch account balance for the sending account
-	//	key, err := types.CreateStorageKey(meta, "System", "Account", from.AsID[:], nil)
 	key, err := types.CreateStorageKey(meta, "System", "Account", fromKey.PublicKey, nil)
 	if err != nil {
 		fmt.Printf("failed to create storage key: %v", err)
@@ -112,25 +106,17 @@ func ex1() {
 	nonce := uint32(accountInfo.Nonce)
 
 	o := types.SignatureOptions{
-		BlockHash:   genesisHash,
-		Era:         types.ExtrinsicEra{IsMortalEra: false},
-		GenesisHash: genesisHash,
-		Nonce:       types.NewUCompactFromUInt(uint64(nonce)),
-		SpecVersion: rv.SpecVersion,
-		Tip:         types.NewUCompactFromUInt(0),
-		// Necessary:
+		BlockHash:          genesisHash,
+		Era:                types.ExtrinsicEra{IsMortalEra: false},
+		GenesisHash:        genesisHash,
+		Nonce:              types.NewUCompactFromUInt(uint64(nonce)),
+		SpecVersion:        rv.SpecVersion,
+		Tip:                types.NewUCompactFromUInt(0),
 		TransactionVersion: rv.TransactionVersion,
 	}
 
-	fmt.Printf("Sending %v from %#x to %#x with nonce %v", amount, fromKey.PublicKey, to.AsID, nonce)
+	fmt.Printf("Sending %v from %#x to %#x with nonce %d\n", amount, fromKey.PublicKey, to.AsID, nonce)
 
-	// Sign the transaction using Alice's default account
-	//	err = ext.Sign(fromKey, o)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-
-	// --------------------------------------------------------------------------------------------------
 	// Unsigned Payload
 	payload, err := createUnsignedPayload(&ext, o)
 	if err != nil {

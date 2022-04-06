@@ -73,6 +73,10 @@ func printLatestBlockHash() {
 	fmt.Println(hash.Hex())
 }
 
+func westendToBase(wndInput float64) uint64 {
+	return uint64(wndInput * (1e12))
+}
+
 func dotToPlank(dotInput int) uint64 {
 	return uint64(dotInput * (1e10))
 }

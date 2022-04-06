@@ -52,6 +52,8 @@ func (c *Connection) ChangedBlockHashes(ID string, checkpoint uint64) (blockHash
 	if err != nil {
 		return
 	}
+	fmt.Println("len: ", len(changes))
+
 	for _, change := range changes {
 		blockHashes = append(blockHashes, change.Block[:])
 	}

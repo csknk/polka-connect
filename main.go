@@ -19,7 +19,14 @@ const (
 	WestendRecipient        = "0x725b16b586c386cf524b067a0449eeef5efc20585f46fe1783db79f1c7cca101" // 5EeeNhoYmB8QKRJ1ffimtb5trLP3bG7gyc6B1cNcnBQCPXH2
 )
 
+type MyStruct struct {
+	Name string
+	ID   int
+}
+
 func main() {
+	n := MyStruct{"David", 1}
+	_ = n
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	// For local dev testnet use NewDefaultConnection()
 	//	nc, err := NewConnection("wss://westend-rpc.polkadot.io")
