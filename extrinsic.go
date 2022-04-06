@@ -9,6 +9,28 @@ import (
 
 type Transaction *types.Extrinsic
 
+// Callindex is a 16 bit wrapper around the `[sectionIndex, methodIndex]` value that uniquely identifies a method
+type CallIndex struct {
+	SectionIndex uint8
+	MethodIndex  uint8
+}
+
+// BalanceTransferCallIndex "hardcoded" values
+var BalanceTransferCallIndex = types.CallIndex{SectionIndex: 4, MethodIndex: 0}
+
+func NewCall(c types.CallIndex, args ...interface{}) (types.Call, error) {
+	var a []byte
+	for _, arg := range args {
+		e, err := types.EncodeToBytes(arg)
+		if err != nil {
+			return types.Call{}, err
+		}
+		a = append(a, e...)
+	}
+
+	return types.Call{CallIndex: c, Args: a}, nil
+}
+
 func (c *Connection) NewExtrinsic(sender signature.KeyringPair, to string, amount uint64) (*types.Extrinsic, error) {
 
 	meta, err := c.Api.RPC.State.GetMetadataLatest()
@@ -24,7 +46,8 @@ func (c *Connection) NewExtrinsic(sender signature.KeyringPair, to string, amoun
 		return nil, fmt.Errorf("recipient set: %w", err)
 	}
 
-	call, err := types.NewCall(meta, "Balances.transfer", recipient, types.NewUCompactFromUInt(amount))
+	//	call, err := types.NewCall(meta, "Balances.transfer", recipient, types.NewUCompactFromUInt(amount))
+	call, err := NewCall(BalanceTransferCallIndex, recipient, types.NewUCompactFromUInt(amount))
 	if err != nil {
 		return nil, fmt.Errorf("problem building new call: %w", err)
 	}

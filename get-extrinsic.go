@@ -316,44 +316,38 @@ func (c *Connection) GetFeePaid(blockHash types.Hash, meta *types.Metadata) erro
 	return nil
 }
 
-//type FeeInter struct {
-//	Weight     types.Weight
-//	Class      string
-//	PartialFee string
-//}
-
 // GetData gets data for a watched address in a given Block
 func (c *Connection) GetData(blockHash types.Hash, receiverAddress string) error {
 	receiverPubKey, err := PublicKeyFromAddress(receiverAddress)
 	if err != nil {
-		return err
+		return fmt.Errorf("error decoding receiver public key from %s: %w", receiverAddress, err)
 	}
 
 	meta, err := c.getMetadata(blockHash)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting metadata for block %#x: %w", blockHash, err)
 	}
 
 	key, err := types.CreateStorageKey(meta, "System", "Events", nil, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating storage key: %w", err)
 	}
 
 	events := EventRecords{}
 	raw, err := c.Api.RPC.State.GetStorageRaw(key, blockHash)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting raw storage for events in %#x: %w", blockHash, err)
 	}
 
 	err = types.EventRecordsRaw(*raw).DecodeEventRecords(meta, &events)
 	if err != nil {
-		return err
+		return fmt.Errorf("error decoding events in block %#x: %w", blockHash, err)
 	}
 
 	// Get the block
 	block, err := c.Api.RPC.Chain.GetBlock(blockHash)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting block for hash %#x: %w", blockHash, err)
 	}
 
 	txEvents := []*TxEvent{}
@@ -364,22 +358,20 @@ func (c *Connection) GetData(blockHash types.Hash, receiverAddress string) error
 
 		index := int(event.Phase.AsApplyExtrinsic)
 		extrinsic := block.Block.Extrinsics[index]
-//		fmt.Printf("ext : %+v\n", extrinsic)
-//		fmt.Printf("nonce : %+v\n", extrinsic.Signature.Nonce)
-//		fmt.Printf("tip : %+v\n", extrinsic.Signature.Tip)
 
 		resInter := Fee{}
 		err = c.Api.Client.Call(&resInter, "payment_queryInfo", extrinsic, blockHash.Hex())
 		if err != nil {
-			return err
-		}
-		fmt.Println("PartialFee: ", resInter.PartialFee)
-		partialFee, err := strconv.ParseInt(resInter.PartialFee, 10, 64)
-		if err != nil {
-			return err
+			return fmt.Errorf("error decoding fee: %w", err)
 		}
 
-		// ---------
+		fmt.Println("PartialFee: ", resInter.PartialFee)
+
+		partialFee, err := strconv.ParseInt(resInter.PartialFee, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error parsing partial fee %s: %w", resInter.PartialFee, err)
+		}
+
 		decodedArgs, err := DecodeExtrinsicArgs(&extrinsic)
 		if err != nil {
 			return fmt.Errorf("error decoding Extrinsic arguments for Extrinsic %d in block %s: %w", index, blockHash, err)
@@ -393,14 +385,14 @@ func (c *Connection) GetData(blockHash types.Hash, receiverAddress string) error
 
 		timestamp, err := c.GetBlockTimestamp(block, blockHash)
 		if err != nil {
-			return err
+			return fmt.Errorf("error gettilng block timestamp for block %#x: %w", blockHash, err)
 		}
 
 		receivingPubkey := hex.EncodeToString(decodedArgs.ReceiverPubKey)
 		sendingPubkey := hex.EncodeToString(extrinsic.Signature.Signer.AsID[:])
 		currentHeight, err := c.ChainHeight()
 		if err != nil {
-			return err
+			return fmt.Errorf("error getting current height: %v", err)
 		}
 
 		txEvent.BlockHash = hex.EncodeToString(blockHash[:])
@@ -413,9 +405,7 @@ func (c *Connection) GetData(blockHash types.Hash, receiverAddress string) error
 		txEvent.BlockHeight = uint64(block.Block.Header.Number)
 		txEvent.Confirmations = currentHeight - txEvent.BlockHeight
 		txEvent.Fee = partialFee + extrinsic.Signature.Tip.Int64()
-		fmt.Println("---")
 		fmt.Println(txEvent)
-		fmt.Println("---")
 
 		txEvents = append(txEvents, txEvent)
 	}

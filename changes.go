@@ -30,8 +30,6 @@ func (c *Connection) GetStorageHistoryForID(ID string, checkpoint uint64) (chang
 		return
 	}
 
-	fmt.Printf("key:\n%#x\n", storageKey)
-
 	startBlockHash, err := c.Api.RPC.Chain.GetBlockHash(checkpoint)
 	if err != nil {
 		err = fmt.Errorf("GetBlockHash failed for account %s: %w", ID, err)
@@ -56,6 +54,19 @@ func (c *Connection) ChangedBlockHashes(ID string, checkpoint uint64) (blockHash
 
 	for _, change := range changes {
 		blockHashes = append(blockHashes, change.Block[:])
+	}
+	return
+}
+
+func (c *Connection) ChangedBlockHashesUnique(ID string, checkpoint uint64) (blockHashes map[[32]byte]bool, err error) {
+	changes, err := c.GetStorageHistoryForID(ID, checkpoint)
+	if err != nil {
+		return
+	}
+	blockHashes = make(map[[32]byte]bool)
+	for _, change := range changes {
+		key := (*[32]byte)(change.Block[:])
+		blockHashes[*key] = true
 	}
 	return
 }
