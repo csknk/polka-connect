@@ -148,10 +148,10 @@ func signPayload(payload types.ExtrinsicPayloadV4, signer signature.KeyringPair)
 	// signature over the message bytes into a Signature struct (see below)
 	//
 	// NOTE: If data is longer than 256 bytes, hash first:
-	// if len(data) > 256 {
-	//	h := blake2b.Sum256(data)
-	//	data = h[:]
-	// }
+	if len(data) > 256 {
+		h := blake2b.Sum256(data)
+		data = h[:]
+	}
 
 	sig, err := signature.Sign(bytes, signer.URI)
 
