@@ -29,5 +29,4 @@ func TestChangedBlockHashes(t *testing.T) {
 		fmt.Printf("%#x\n", block)
 
 	}
-
 }

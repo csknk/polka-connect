@@ -5,6 +5,7 @@ import (
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"golang.org/x/crypto/blake2b"
 )
 
 type Transaction *types.Extrinsic
@@ -148,9 +149,9 @@ func signPayload(payload types.ExtrinsicPayloadV4, signer signature.KeyringPair)
 	// signature over the message bytes into a Signature struct (see below)
 	//
 	// NOTE: If data is longer than 256 bytes, hash first:
-	if len(data) > 256 {
-		h := blake2b.Sum256(data)
-		data = h[:]
+	if len(bytes) > 256 {
+		h := blake2b.Sum256(bytes)
+		bytes = h[:]
 	}
 
 	sig, err := signature.Sign(bytes, signer.URI)

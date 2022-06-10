@@ -44,14 +44,4 @@ fmt.Printf("Transfer sent with hash %#x\n", hash) // sent, but included?
 See: https://pkg.go.dev/github.com/centrifuge/go-substrate-rpc-client?utm_source=godoc#example-package-MakeASimpleTransfer
 See: https://pkg.go.dev/github.com/centrifuge/go-substrate-rpc-client?utm_source=godoc#hdr-Signing_extrinsics
 
-Coding Notes
-------------
-Convert `types.Hash` to a `[]byte` type:
 
-```go
-// HashToBytes converts types.Hash to a []byte.
-// rawBytes := hashType[:]
-func HashToBytes(hash types.Hash) []byte {
-	return hash[:]
-}
-```
