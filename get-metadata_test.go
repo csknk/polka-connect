@@ -17,21 +17,40 @@ func Test_getLatestMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	c.getEvents(meta)
-
 }
 
-func TestGetEventsFromMeta(t *testing.T) {
-	c, err := NewConnection("http://localhost:9933")
+func TestListAllEventsFromMeta(t *testing.T) {
+	// NOTE: Westend and Mainnet have a different set of Event types
+	//	c, err := NewConnection("https://rpc.polkadot.io")
+	c, err := NewConnection("https://westend-rpc.polkadot.io")
 	assert.NoError(t, err)
 	meta, err := c.getLatestMetadata()
 	assert.NoError(t, err)
 
-	targetMod := types.Text("NominationPools")
-	targetVariant := types.Text("StateChanged")
+	for _, mod := range meta.AsMetadataV14.Pallets {
+		typ := meta.AsMetadataV14.EfficientLookup[mod.Events.Type.Int64()]
+		//		if typ.Def.IsVariant {
+		for i := 0; i < len(typ.Def.Variant.Variants); i++ {
+			fmt.Printf("%s.%s\n", mod.Name, typ.Def.Variant.Variants[i].Name)
+		}
+		//		}
+	}
+}
+
+func TestGetEventsFromMeta(t *testing.T) {
+	c, err := NewConnection("https://rpc.polkadot.io")
+	assert.NoError(t, err)
+	meta, err := c.getLatestMetadata()
+	assert.NoError(t, err)
+
+	targetMod := types.Text("Democracy")
+	targetVariant := types.Text("Voted")
 	for _, mod := range meta.AsMetadataV14.Pallets {
 		if !mod.HasEvents {
 			continue
 		}
+		//		fmt.Println(mod.Name)
+
 		// filter mod of interest
 		if mod.Name != targetMod {
 			continue
@@ -93,7 +112,43 @@ func outputTargetedPalletEventData(t *testing.T, meta *types.Metadata, mod types
 			if vars.Name != targetVariant {
 				continue
 			}
-			outputVariantData(t, mod, vars, meta)
+			//			outputVariantData(t, mod, vars, meta)
+			/*
+				// Get Perbill type in Staking.ValidatorPrefsSet
+				parent := meta.AsMetadataV14.EfficientLookup[vars.Fields[1].Type.Int64()]
+				childIndex := parent.Def.Composite.Fields[0]
+				child := meta.AsMetadataV14.EfficientLookup[childIndex.Type.Int64()]
+
+				fmt.Printf("%#v\n", parent)
+				fmt.Printf("%#v\n", child)
+
+				childBytes, err := json.MarshalIndent(child, "", "\t")
+				assert.NoError(t, err)
+				fmt.Printf("%s\n", childBytes)
+			*/
+			// Get Perbill type in Staking.ValidatorPrefsSet
+			parent := meta.AsMetadataV14.EfficientLookup[vars.Fields[2].Type.Int64()]
+			variants := parent.Def.Variant.Variants
+			for _, v := range variants {
+				fmt.Println("++++++", v.Name)
+				fmt.Printf("%#v\n", meta.AsMetadataV14.EfficientLookup[v.Fields[0].Type.Int64()].Def.Composite.Fields)
+
+				//				if v.Name != "Standard" {
+				//					continue
+				//				}
+				//				fmt.Printf("%#v\n", v)
+
+			}
+
+			//			child := meta.AsMetadataV14.EfficientLookup[childIndex.Type.Int64()]
+			//
+			//			fmt.Printf("%#v\n", parent)
+			//			fmt.Printf("%#v\n", child)
+			//
+			//			childBytes, err := json.MarshalIndent(child, "", "\t")
+			//			assert.NoError(t, err)
+			//			fmt.Printf("%s\n", childBytes)
+
 		}
 	}
 }
@@ -104,7 +159,14 @@ func outputVariantData(t *testing.T, mod types.PalletMetadataV14, vars types.Si1
 	assert.NoError(t, err)
 	fmt.Printf("%s\n", varsBytes)
 
-	outputFields(vars.Fields, meta, "", t)
+	outputFields(vars.Fields, meta, " ", t)
+
+	//	fmt.Println("++++++")
+	//	ty := meta.AsMetadataV14.EfficientLookup[vars.Fields[1].Type.Int64()]
+	//	ty1 := meta.AsMetadataV14.EfficientLookup[ty.Def.Composite.Fields[0].Type.Int64()]
+	//	tyBytes, err := json.MarshalIndent(ty1, "", "\t")
+	//	assert.NoError(t, err)
+	//	fmt.Printf("%s\n", tyBytes)
 
 }
 
@@ -150,7 +212,7 @@ func outputFields(fields []types.Si1Field, meta *types.Metadata, prefix string, 
 				fmt.Println("looping over Variants...")
 
 				for _, variant := range subtype.Def.Variant.Variants {
-					prefix += "\t"
+					prefix += " "
 					outputFields(variant.Fields, meta, prefix, t)
 				}
 			}
